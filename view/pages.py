@@ -112,7 +112,6 @@ def analysis_pk():
     return render_template('analysis_pk.html', **locals())
 
 
-
 @page.route('/compare_analysis', methods=['post', 'get'])
 def analysis_compare():
     platform = request.args.get('platform')

@@ -10,7 +10,7 @@ from solox.public.iosperf._perf import DataType, Performance
 from solox.public.adb import adb
 from solox.public.common import Devices, File, Method, Platform
 from solox.public.fps import FPSMonitor, TimeUtils
-
+import random
 d = Devices()
 f = File()
 m = Method()
@@ -33,6 +33,8 @@ class CPU(object):
         if self.pid is None and self.platform == Platform.Android:
             self.pid = d.getPid(pkgName=self.pkgName, deviceId=self.deviceId)[0].split(':')[0]
 
+    def callback_lezhi(_type: tidevice.DataType, value: dict):
+        print("R:", _type.value, value)
     def getprocessCpuStat(self):
         """get the cpu usage of a process at a certain time"""
         cmd = f'cat /proc/{self.pid}/stat'
@@ -134,6 +136,28 @@ class CPU(object):
             f.add_log(os.path.join(f.report_dir,'cpu_sys.log'), apm_time, sysCpuRate)
         return appCpuRate, sysCpuRate
 
+    def getiOSCpuRate_lezhitest(self, noLog=False):
+        appCpuRate = random.random()
+        sysCpuRate = random.random()
+        time.sleep(1)
+        return appCpuRate, sysCpuRate
+    def getiOSCpuRate_test(self, noLog=False):
+        """get the iOS cpu rate of a process, unit:%"""
+        t = tidevice.Device()
+        perf = tidevice.Performance(t, [DataType.CPU, DataType.MEMORY, DataType.NETWORK, DataType.FPS, DataType.PAGE, DataType.SCREENSHOT, DataType.GPU])
+        #  tidevice version <= 0.4.16:
+        #  perf = tidevice.Performance(t)
+        perf.start("com.apple.Preferences", callback=self.callback_lezhi)
+        time.sleep(10)
+        #perf.stop()
+        apm = iosAPM(self.pkgName)
+        appCpuRate = round(float(apm.getPerformance(apm.cpu)[0]), 2)
+        sysCpuRate = round(float(apm.getPerformance(apm.cpu)[1]), 2)
+        if noLog is False:
+            apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+            f.add_log(os.path.join(f.report_dir,'cpu_app.log'), apm_time, appCpuRate)
+            f.add_log(os.path.join(f.report_dir,'cpu_sys.log'), apm_time, sysCpuRate)
+        return appCpuRate, sysCpuRate
     def getCpuRate(self, noLog=False):
         """Get the cpu rate of a process, unit:%"""
         appCpuRate, systemCpuRate = self.getAndroidCpuRate(noLog) if self.platform == Platform.Android else self.getiOSCpuRate(noLog)
@@ -155,18 +179,18 @@ class MEM(object):
         m_total = re.search(r'TOTAL\s*(\d+)', output)
         m_native = re.search(r'Native Heap\s*(\d+)', output)
         m_dalvik = re.search(r'Dalvik Heap\s*(\d+)', output)
-        print("m_total is :")
-        print(m_total)
-        print("m_native is :")
-        print(m_native)
-        print("m_dalvik is :")
-        print(m_dalvik)
-        print("m_total.group(1) is :")
-        print (float(m_total.group(1)))
-        print("m_native.group(1) is :")
-        print (float(m_native.group(1)))
-        print("m_dalvik.group(1) is :")
-        print (float(m_dalvik.group(1)))
+        #print("m_total is :")
+        #print(m_total)
+        #print("m_native is :")
+        #print(m_native)
+        #print("m_dalvik is :")
+        #print(m_dalvik)
+        #print("m_total.group(1) is :")
+        #print (float(m_total.group(1)))
+        #print("m_native.group(1) is :")
+        #print (float(m_native.group(1)))
+        #print("m_dalvik.group(1) is :")
+        #print (float(m_dalvik.group(1)))
         totalPass = round(float(float(m_total.group(1))) / 1024, 2)
         nativePass = round(float(float(m_native.group(1))) / 1024, 2)
         dalvikPass = round(float(float(m_dalvik.group(1))) / 1024, 2)
@@ -178,6 +202,12 @@ class MEM(object):
         totalPass = round(float(apm.getPerformance(apm.memory)), 2)
         nativePass = 0
         dalvikPass = 0
+        return totalPass, nativePass, dalvikPass
+    def getiOSMem_test(self):
+        totalPass = random.random()
+        nativePass = random.random()
+        dalvikPass = random.random()
+        time.sleep(1)
         return totalPass, nativePass, dalvikPass
 
     def getProcessMem(self, noLog=False):

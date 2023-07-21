@@ -8,6 +8,7 @@ from solox.public.apm import CPU, MEM, Flow, FPS, Battery, GPU, Target
 from solox.public.apm_pk import CPU_PK, MEM_PK, Flow_PK, FPS_PK
 from solox.public.common import Devices, File, Method, Install, Platform
 
+
 d = Devices()
 f = File()
 api = Blueprint("api", __name__)

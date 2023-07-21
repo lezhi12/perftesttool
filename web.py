@@ -14,9 +14,12 @@ from solox.view.pages import page
 from logzero import logger
 from threading import Lock
 from flask_socketio import SocketIO, disconnect
-from flask import Flask
+from flask import Flask, g, make_response, request
+#使用pyinstrument统计性能
+from pyinstrument import Profiler
 from pyfiglet import Figlet
 from solox import __version__
+import queue
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.register_blueprint(api)
@@ -26,6 +29,20 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 thread = True
 thread_lock = Lock()
 
+@app.before_request
+def before_request():
+    if "profile" in request.args:
+        g.profiler = Profiler()
+        g.profiler.start()
+
+
+@app.after_request
+def after_request(response):
+    if not hasattr(g, "profiler"):
+        return response
+    g.profiler.stop()
+    output_html = g.profiler.output_html()
+    return make_response(output_html)
 
 @socketio.on('connect', namespace='/logcat')
 def connect():
@@ -39,7 +56,38 @@ def connect():
         if thread:
             thread = socketio.start_background_task(target=backgroundThread)
 
+@socketio.on('connect', namespace='/tidevice')
+def connect():
+    socketio.emit('start connect', {'data': 'Connected'}, namespace='/tidevice')
+    global thread
+    thread = True
+    with thread_lock:
+        if thread:
+            thread = socketio.start_background_task(target=tidevice_backgroundThread)
 
+def tidevice_backgroundThread():
+    try:
+        tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu", stdout=subprocess.PIPE,
+                                  shell=True)
+        q = queue.Queue()
+        while thread:
+            buff = tidevice_cmd.stdout.readline()
+            buff_str = buff.decode()
+            cpu_list = re.findall(r'\d+\.+\d*', buff_str)
+            cpu_list[0] = round(float(cpu_list[0]), 2)
+            cpu_list[1] = round(float(cpu_list[1]), 2)
+            #logger.debug("lezhi:buffer")
+            logger.debug(cpu_list)
+            q.put(cpu_list)
+            socketio.sleep(0.5)
+            socketio.emit('message', {'data': q.get()}, namespace='/tidevice')
+            if tidevice_cmd.poll() != None:
+                break
+    except Exception as e:
+        logger.debug("lezhi error")
+        logger.exception(e)
+    finally:
+        tidevice_cmd.terminate()
 def backgroundThread():
     global thread
     try:
@@ -67,6 +115,12 @@ def disconnect():
     logger.warning('Logcat client disconnected')
     thread = False
     disconnect()
+
+@socketio.on('disconnect_request', namespace='/tidevice')
+def disconnect():
+    global thread
+    logger.warning('Tidevice client disconnected')
+    thread = False
 
 def hostIP():
     try:
