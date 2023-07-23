@@ -214,11 +214,11 @@ class MEM(object):
         """Get the app memory"""
         totalPass, nativePass, dalvikPass = self.getAndroidMem() if self.platform == Platform.Android else self.getiOSMem()
         if noLog is False:    
-            apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
-            f.add_log(os.path.join(f.report_dir,'mem_total.log'), apm_time, totalPass)
+            _time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+            f.add_log(os.path.join(f.report_dir,'mem_total.log'), _time, totalPass)
             if self.platform == Platform.Android:
-                f.add_log(os.path.join(f.report_dir,'mem_native.log'), apm_time, nativePass)
-                f.add_log(os.path.join(f.report_dir,'mem_dalvik.log'), apm_time, dalvikPass)
+                f.add_log(os.path.join(f.report_dir,'mem_native.log'), _time, nativePass)
+                f.add_log(os.path.join(f.report_dir,'mem_dalvik.log'), _time, dalvikPass)
         return totalPass, nativePass, dalvikPass
 
 class Battery(object):

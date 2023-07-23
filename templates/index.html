@@ -1533,12 +1533,15 @@ SoloX - Application Performance Monitoring
 
     function startTidevice() {
         let device = $('.select-device').val();
+        console.log("startTidevice")
+        status = true
         if(device){
             $('#run-logcat').hide();
             $('#stop-logcat').show();
             socket = io.connect('http://' + document.domain + ':' + location.port + '/tidevice',{'forceNew':true });
             //socket = io.connect(namespace='/tidevice',query_string='http://' + document.domain + ':' + location.port+'/?device='+device,{ forceNew: true })
             socket.on('message', function (msg) {
+                console.log("msg.data: %o",msg.data)
                 if(status){
                     //$('#logcat-content').prepend(msg.data[0]+msg.data[1] + '<br>');
                     var app_series = cpu_chart.series[0];
@@ -1560,8 +1563,6 @@ SoloX - Application Performance Monitoring
     };
 
     function stopTidevice() {
-        $('#run-logcat').show();
-        $('#stop-logcat').hide();
         status = false;
         socket.emit('disconnect_request');
         socket.close()

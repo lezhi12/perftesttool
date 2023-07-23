@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import multiprocessing
+import datetime
 import subprocess
 import time
 import os
@@ -19,7 +20,10 @@ from flask import Flask, g, make_response, request
 from pyinstrument import Profiler
 from pyfiglet import Figlet
 from solox import __version__
+from solox.public.common import Devices, File, Method, Platform
+import threading
 import queue
+f = File()
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.register_blueprint(api)
@@ -56,6 +60,34 @@ def connect():
         if thread:
             thread = socketio.start_background_task(target=backgroundThread)
 
+# Function to write data to the disk (asynchronous)
+def write_to_disk(queue, file_path, event):
+    print("write_to_disk")
+    apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+    with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys:
+        while not event.is_set():
+            #time.sleep(1)
+            data = queue.get()
+            #print("__________________")
+            #print(data) 
+            if data is None:  
+                continue
+            cpu_app = data[0]
+            cpu_sys = data[1]
+            f_app.write(apm_time + "="+ str(cpu_app) + "\n")
+            f_sys.write(apm_time + "="+ str(cpu_sys) + "\n")
+    logger.info("write_to_disk subprocess has been finished!")
+    
+
+# Function to start writing data to the disk asynchronously
+def start_async_writer(queue, file_path,event):
+    print("start_async_writer")
+    writer_thread = threading.Thread(target=write_to_disk, args=(queue, file_path,event))
+    #主线程结束，守护线程立刻结束没有机会关闭文件，因此不要设置为守护线程
+    #writer_thread.daemon = True
+    writer_thread.start()
+    return writer_thread
+
 @socketio.on('connect', namespace='/tidevice')
 def connect():
     socketio.emit('start connect', {'data': 'Connected'}, namespace='/tidevice')
@@ -63,13 +95,18 @@ def connect():
     thread = True
     with thread_lock:
         if thread:
-            thread = socketio.start_background_task(target=tidevice_backgroundThread)
+            thread = socketio.start_background_task(target=tidevice_backgroundThread())
 
 def tidevice_backgroundThread():
+    global thread
     try:
         tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu", stdout=subprocess.PIPE,
                                   shell=True)
-        q = queue.Queue()
+        #tidevice_q = queue.Queue()
+        #用来通知写日志的子线程结束，有机会关闭文件
+        event_stop_write_to_disk = threading.Event()
+        cpu_info_q = queue.Queue()
+        writer_log_todisk_thread = start_async_writer(cpu_info_q,f.report_dir,event_stop_write_to_disk)
         while thread:
             buff = tidevice_cmd.stdout.readline()
             buff_str = buff.decode()
@@ -77,17 +114,22 @@ def tidevice_backgroundThread():
             cpu_list[0] = round(float(cpu_list[0]), 2)
             cpu_list[1] = round(float(cpu_list[1]), 2)
             #logger.debug("lezhi:buffer")
-            logger.debug(cpu_list)
-            q.put(cpu_list)
-            socketio.sleep(0.5)
-            socketio.emit('message', {'data': q.get()}, namespace='/tidevice')
+            #logger.debug(cpu_list)
+            #tidevice_q.put(cpu_list)
+            #socketio.sleep(0.5)
+            #socketio.emit('message', {'data': tidevice_q.get()}, namespace='/tidevice')
+            cpu_info_q.put(cpu_list)#入队，等待写入硬盘
+            socketio.emit('message', {'data': cpu_list}, namespace='/tidevice')
             if tidevice_cmd.poll() != None:
                 break
     except Exception as e:
         logger.debug("lezhi error")
         logger.exception(e)
     finally:
+        #停止调用tidevice命令行
         tidevice_cmd.terminate()
+        #通知写日志子线程结束，可以关闭文件了
+        event_stop_write_to_disk.set()
 def backgroundThread():
     global thread
     try:
@@ -184,5 +226,7 @@ def main(host=hostIP(), port=50003):
     except Exception as e:
         logger.exception(e)
     except KeyboardInterrupt:
+        global thread
+        thread = False
         logger.info('stop solox success')
         sys.exit()        
