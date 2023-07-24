@@ -61,28 +61,32 @@ def connect():
             thread = socketio.start_background_task(target=backgroundThread)
 
 # Function to write data to the disk (asynchronous)
-def write_to_disk(queue, file_path, event):
-    print("write_to_disk")
+def write_to_disk(queue, file_path):
+    logger.info("begain to write_to_disk")
     apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
     with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys:
-        while not event.is_set():
+        while True:
             #time.sleep(1)
             data = queue.get()
             #print("__________________")
             #print(data) 
             if data is None:  
                 continue
+            #监控结束，可以开始关闭文件了
+            elif data[0]=='time to quit':
+                break
             cpu_app = data[0]
             cpu_sys = data[1]
             f_app.write(apm_time + "="+ str(cpu_app) + "\n")
             f_sys.write(apm_time + "="+ str(cpu_sys) + "\n")
     logger.info("write_to_disk subprocess has been finished!")
+    socketio.emit('log_is_ready', namespace='/tidevice')
     
 
 # Function to start writing data to the disk asynchronously
-def start_async_writer(queue, file_path,event):
+def start_async_writer(queue, file_path):
     print("start_async_writer")
-    writer_thread = threading.Thread(target=write_to_disk, args=(queue, file_path,event))
+    writer_thread = threading.Thread(target=write_to_disk, args=(queue, file_path))
     #主线程结束，守护线程立刻结束没有机会关闭文件，因此不要设置为守护线程
     #writer_thread.daemon = True
     writer_thread.start()
@@ -95,7 +99,7 @@ def connect():
     thread = True
     with thread_lock:
         if thread:
-            thread = socketio.start_background_task(target=tidevice_backgroundThread())
+            thread = socketio.start_background_task(target=tidevice_backgroundThread)
 
 def tidevice_backgroundThread():
     global thread
@@ -103,10 +107,8 @@ def tidevice_backgroundThread():
         tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu", stdout=subprocess.PIPE,
                                   shell=True)
         #tidevice_q = queue.Queue()
-        #用来通知写日志的子线程结束，有机会关闭文件
-        event_stop_write_to_disk = threading.Event()
         cpu_info_q = queue.Queue()
-        writer_log_todisk_thread = start_async_writer(cpu_info_q,f.report_dir,event_stop_write_to_disk)
+        writer_log_todisk_thread = start_async_writer(cpu_info_q,f.report_dir)
         while thread:
             buff = tidevice_cmd.stdout.readline()
             buff_str = buff.decode()
@@ -119,6 +121,7 @@ def tidevice_backgroundThread():
             #socketio.sleep(0.5)
             #socketio.emit('message', {'data': tidevice_q.get()}, namespace='/tidevice')
             cpu_info_q.put(cpu_list)#入队，等待写入硬盘
+            socketio.sleep(0.5)
             socketio.emit('message', {'data': cpu_list}, namespace='/tidevice')
             if tidevice_cmd.poll() != None:
                 break
@@ -127,9 +130,11 @@ def tidevice_backgroundThread():
         logger.exception(e)
     finally:
         #停止调用tidevice命令行
-        tidevice_cmd.terminate()
-        #通知写日志子线程结束，可以关闭文件了
-        event_stop_write_to_disk.set()
+        #logger.info("tidevice_cmd.terminate")
+        #tidevice_cmd.terminate()
+        #队列中插入结束字符串，通知写日志子线程读到这里就可以开始关闭文件了
+        logger.info("cpu_info_q.put_time to quit")
+        cpu_info_q.put(["time to quit","time to quit"])
 def backgroundThread():
     global thread
     try:

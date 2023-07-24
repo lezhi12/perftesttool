@@ -1422,7 +1422,61 @@ SoloX - Application Performance Monitoring
         }
     }
 
+    function request_report(){
+        var process = '';
+        var wifi_switch = $('#net-switch').is(':checked');
+        $.ajax({
+            url: "/apm/create/report",
+            type: "GET",
+            async: true,
+            cache: false,
+            data:{
+                platform:platform,
+                model:'normal',
+                app:$('.select-app').val(),
+                devices:$('.select-device').val(),
+                wifi_switch:wifi_switch,
+                process:process
+            },
+            beforeSend: function () {
+                
+                if(lan == 'cn'){
+                    SwalLoading('保存数据','正在保存数据生成报告, 请不要离开页面.')
+                }else{
+                    SwalLoading('Save data','Saving data to generate report, please do not leave.')
+                }
+            },
+            success: function (data) {
+                if(data['status']==1){
+                    window.location.href = '/report?lan='+lan
+                }else{
+                    SwalFire('error','Execution error',data['msg'],2000)
+                }
+                socket.close()
+            }
+        })
+
+    }
+
     function stopTask(){
+        stop = true;
+        var wifi_switch = $('#net-switch').is(':checked');
+        $('#run-apm').show();
+        $('#stop-apm').hide();
+        window.clearTimeout(timerQ);
+        var process = '';
+        if(platform == 'Android'){
+            process = $('.select-pid').val()
+        }
+        stopTidevice();
+        socket.on('log_is_ready',function () {
+            console.log("log_is_ready");
+            request_report();
+            });
+    }
+
+    //原来的stoptask方法，回滚的时候，删掉现在的stoptask方法，用这个即可
+    function stopTask_origin(){
         stop = true;
         var wifi_switch = $('#net-switch').is(':checked');
         $('#run-apm').show();
@@ -1564,8 +1618,7 @@ SoloX - Application Performance Monitoring
 
     function stopTidevice() {
         status = false;
-        socket.emit('disconnect_request');
-        socket.close()
+        socket.emit('disconnect_request')
 
     };
 
