@@ -384,6 +384,8 @@ def makeReport():
     devices = method._request(request, 'devices')
     wifi_switch = method._request(request, 'wifi_switch')
     process = method._request(request, 'process')
+    #log_is_ready这个消息收不到了，有空再排查，先写死延迟5秒，等日志文件写完，再去读
+    #time.sleep(5)
     try:
         if platform == Platform.Android:
             deviceId = d.getIdbyDevice(devices, platform)

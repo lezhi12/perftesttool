@@ -23,6 +23,7 @@ from solox import __version__
 from solox.public.common import Devices, File, Method, Platform
 import threading
 import queue
+
 f = File()
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -60,11 +61,13 @@ def connect():
         if thread:
             thread = socketio.start_background_task(target=backgroundThread)
 
+
 # Function to write data to the disk (asynchronous)
 def write_to_disk(queue, file_path):
+
     logger.info("begain to write_to_disk")
     apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
-    with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys:
+    with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys,open(os.path.join(file_path,'mem_total.log'), "a+") as f_mem:
         while True:
             #time.sleep(1)
             data = queue.get()
@@ -75,12 +78,20 @@ def write_to_disk(queue, file_path):
             #监控结束，可以开始关闭文件了
             elif data[0]=='time to quit':
                 break
-            cpu_app = data[0]
-            cpu_sys = data[1]
-            f_app.write(apm_time + "="+ str(cpu_app) + "\n")
-            f_sys.write(apm_time + "="+ str(cpu_sys) + "\n")
+            if data[-1]=="cpu":
+                cpu_app = data[0]
+                cpu_sys = data[1]
+                f_app.write(apm_time + "="+ str(cpu_app) + "\n")
+                f_sys.write(apm_time + "="+ str(cpu_sys) + "\n")
+            elif data[-1]=="memory":
+                mem_total = data[0]
+                f_mem.write(apm_time + "="+ str(mem_total) + "\n")
     logger.info("write_to_disk subprocess has been finished!")
-    socketio.emit('log_is_ready', namespace='/tidevice')
+    try:
+        #socketio.emit('log_is_ready', namespace='/tidevice')
+        socketio.emit('message', {'data': "log is ready"}, namespace='/tidevice')
+    except Exception as e:
+            logger.exception(e)
     
 
 # Function to start writing data to the disk asynchronously
@@ -104,7 +115,7 @@ def connect():
 def tidevice_backgroundThread():
     global thread
     try:
-        tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu", stdout=subprocess.PIPE,
+        tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu,memory", stdout=subprocess.PIPE,
                                   shell=True)
         #tidevice_q = queue.Queue()
         cpu_info_q = queue.Queue()
@@ -113,8 +124,16 @@ def tidevice_backgroundThread():
             buff = tidevice_cmd.stdout.readline()
             buff_str = buff.decode()
             cpu_list = re.findall(r'\d+\.+\d*', buff_str)
-            cpu_list[0] = round(float(cpu_list[0]), 2)
-            cpu_list[1] = round(float(cpu_list[1]), 2)
+            cpu_title = re.findall(r'^\S+\s', buff_str)
+            cpu_title = cpu_title[0].strip()
+            if cpu_title=="cpu" and len(cpu_list)==2:
+                cpu_list[0] = round(float(cpu_list[0]), 2)
+                cpu_list[1] = round(float(cpu_list[1]), 2)
+            elif cpu_title=="memory"and len(cpu_list)==1:
+                cpu_list[0] = round(float(cpu_list[0]), 2)
+            else:
+                continue
+            cpu_list.append(cpu_title)
             #logger.debug("lezhi:buffer")
             #logger.debug(cpu_list)
             #tidevice_q.put(cpu_list)
@@ -122,11 +141,11 @@ def tidevice_backgroundThread():
             #socketio.emit('message', {'data': tidevice_q.get()}, namespace='/tidevice')
             cpu_info_q.put(cpu_list)#入队，等待写入硬盘
             socketio.sleep(0.5)
+            #这里要想不出现偶尔卡顿得情况，服务器端需要安装eventlet，否则socket.io网络层默认使用Werkzeug，从F12可以看出来仍然是长轮询，就会卡。
             socketio.emit('message', {'data': cpu_list}, namespace='/tidevice')
             if tidevice_cmd.poll() != None:
                 break
     except Exception as e:
-        logger.debug("lezhi error")
         logger.exception(e)
     finally:
         #停止调用tidevice命令行

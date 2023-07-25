@@ -1469,10 +1469,11 @@ SoloX - Application Performance Monitoring
             process = $('.select-pid').val()
         }
         stopTidevice();
-        socket.on('log_is_ready',function () {
-            console.log("log_is_ready");
-            request_report();
-            });
+        setTimeout(request_report,5000);
+        //socket.on('log_is_ready',function () {
+        //    console.log("log_is_ready");
+        //    request_report();
+        //    });
     }
 
     //原来的stoptask方法，回滚的时候，删掉现在的stoptask方法，用这个即可
@@ -1595,8 +1596,10 @@ SoloX - Application Performance Monitoring
             socket = io.connect('http://' + document.domain + ':' + location.port + '/tidevice',{'forceNew':true });
             //socket = io.connect(namespace='/tidevice',query_string='http://' + document.domain + ':' + location.port+'/?device='+device,{ forceNew: true })
             socket.on('message', function (msg) {
-                console.log("msg.data: %o",msg.data)
-                if(status){
+                console.log("msg.data: %o",msg.data);
+                item_type = msg.data[msg.data.length-1];
+                console.log("item_type: %o",item_type);
+                if(status && item_type=="cpu"){
                     //$('#logcat-content').prepend(msg.data[0]+msg.data[1] + '<br>');
                     var app_series = cpu_chart.series[0];
                     var sys_series = cpu_chart.series[1];
@@ -1606,6 +1609,12 @@ SoloX - Application Performance Monitoring
                             
                     app_series.addPoint([x, y_app], true, true);
                     sys_series.addPoint([x, y_sys], true, true);
+                }
+                else if(status && item_type=="memory"){
+                    var series = mem_chart.series[0];
+                    var x = (new Date()).getTime(),
+                        y = msg.data[0];
+                    series.addPoint([x, y], true, true);
                 }
             });
         }else{
