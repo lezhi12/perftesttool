@@ -70,17 +70,15 @@ def write_to_disk(queue, file_path):
         while True:
             #time.sleep(1)
             data = queue.get()
-            apm_time = data[-2]
-            apm_time = int(apm_time)
-            apm_time = time.localtime(apm_time/1000)
-            apm_time = time.strftime("%H:%M:%S",apm_time)
-            #print("__________________")
-            #print(data) 
             if data is None:  
                 continue
             #监控结束，可以开始关闭文件了
             elif data[0]=='time to quit':
                 break
+            apm_time = data[-2]
+            apm_time = int(apm_time)
+            apm_time = time.localtime(apm_time/1000)
+            apm_time = time.strftime("%H:%M:%S",apm_time)
             if data[-1]=="cpu":
                 cpu_app = data[0]
                 cpu_sys = data[1]
@@ -160,8 +158,8 @@ def tidevice_backgroundThread():
         logger.exception(e)
     finally:
         #停止调用tidevice命令行
-        #logger.info("tidevice_cmd.terminate")
-        #tidevice_cmd.terminate()
+        logger.info("tidevice_cmd.terminate")
+        tidevice_cmd.terminate()
         #队列中插入结束字符串，通知写日志子线程读到这里就可以开始关闭文件了
         logger.info("cpu_info_q.put_time to quit")
         cpu_info_q.put(["time to quit","time to quit"])
