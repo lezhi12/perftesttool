@@ -66,11 +66,14 @@ def connect():
 def write_to_disk(queue, file_path):
 
     logger.info("begain to write_to_disk")
-    apm_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
     with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys,open(os.path.join(file_path,'mem_total.log'), "a+") as f_mem:
         while True:
             #time.sleep(1)
             data = queue.get()
+            apm_time = data[-2]
+            apm_time = int(apm_time)
+            apm_time = time.localtime(apm_time/1000)
+            apm_time = time.strftime("%H:%M:%S",apm_time)
             #print("__________________")
             #print(data) 
             if data is None:  
@@ -87,11 +90,11 @@ def write_to_disk(queue, file_path):
                 mem_total = data[0]
                 f_mem.write(apm_time + "="+ str(mem_total) + "\n")
     logger.info("write_to_disk subprocess has been finished!")
-    try:
+    #try:
         #socketio.emit('log_is_ready', namespace='/tidevice')
-        socketio.emit('message', {'data': "log is ready"}, namespace='/tidevice')
-    except Exception as e:
-            logger.exception(e)
+        #socketio.emit('message', {'data': "log is ready"}, namespace='/tidevice')
+    #except Exception as e:
+    #        logger.exception(e)
     
 
 # Function to start writing data to the disk asynchronously
@@ -123,6 +126,13 @@ def tidevice_backgroundThread():
         while thread:
             buff = tidevice_cmd.stdout.readline()
             buff_str = buff.decode()
+            time_stamp_re = "'timestamp': \d+"
+            time_stamp = re.findall(time_stamp_re,buff_str)
+            if isinstance(time_stamp,list) and len(time_stamp)==1:
+                time_stamp = time_stamp[0].split(":")[-1].strip()
+            else:
+                #无效时间戳，丢弃数据
+                continue
             cpu_list = re.findall(r'\d+\.+\d*', buff_str)
             cpu_title = re.findall(r'^\S+\s', buff_str)
             cpu_title = cpu_title[0].strip()
@@ -133,6 +143,7 @@ def tidevice_backgroundThread():
                 cpu_list[0] = round(float(cpu_list[0]), 2)
             else:
                 continue
+            cpu_list.append(time_stamp)
             cpu_list.append(cpu_title)
             #logger.debug("lezhi:buffer")
             #logger.debug(cpu_list)

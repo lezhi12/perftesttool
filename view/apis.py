@@ -527,11 +527,11 @@ def getLogData():
     try:
         fucDic = {
             'cpu': f.getCpuLog(platform, scene),
-            'mem': f.getMemLog(platform, scene),
-            'battery': f.getBatteryLog(platform, scene),
-            'flow': f.getFlowLog(platform, scene),
-            'fps': f.getFpsLog(platform, scene),
-            'gpu': f.getGpuLog(platform, scene)
+            'mem': f.getMemLog(platform, scene)
+            #'battery': f.getBatteryLog(platform, scene),
+            #'flow': f.getFlowLog(platform, scene),
+            #'fps': f.getFpsLog(platform, scene),
+            #'gpu': f.getGpuLog(platform, scene)
         }
         result = fucDic[target]
     except Exception as e:

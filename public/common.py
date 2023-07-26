@@ -580,46 +580,47 @@ class File:
         totalPassData = self.readLog(scene=scene, filename='mem_total.log')[1]
         totalPassAvg = f'{round(sum(totalPassData) / len(totalPassData), 2)}MB'
 
-        fpsData = self.readLog(scene=scene, filename='fps.log')[1]
-        fpsAvg = f'{int(sum(fpsData) / len(fpsData))}HZ/s'
+        #fpsData = self.readLog(scene=scene, filename='fps.log')[1]
+        #fpsAvg = f'{int(sum(fpsData) / len(fpsData))}HZ/s'
 
-        flowSendData = self.readLog(scene=scene, filename='upflow.log')[1]
-        flowSend = f'{round(float(sum(flowSendData) / 1024), 2)}MB'
+        #flowSendData = self.readLog(scene=scene, filename='upflow.log')[1]
+        #flowSend = f'{round(float(sum(flowSendData) / 1024), 2)}MB'
 
-        flowRecvData = self.readLog(scene=scene, filename='downflow.log')[1]
-        flowRecv = f'{round(float(sum(flowRecvData) / 1024), 2)}MB'
+        #flowRecvData = self.readLog(scene=scene, filename='downflow.log')[1]
+        #flowRecv = f'{round(float(sum(flowRecvData) / 1024), 2)}MB'
 
-        batteryTemlData = self.readLog(scene=scene, filename='battery_tem.log')[1]
-        batteryTeml = round(sum(batteryTemlData) / len(batteryTemlData), 2)
+        #batteryTemlData = self.readLog(scene=scene, filename='battery_tem.log')[1]
+        #batteryTeml = round(sum(batteryTemlData) / len(batteryTemlData), 2)
 
-        batteryCurrentData = self.readLog(scene=scene, filename='battery_current.log')[1]
-        batteryCurrent = round(sum(batteryCurrentData) / len(batteryCurrentData), 2)
+        #batteryCurrentData = self.readLog(scene=scene, filename='battery_current.log')[1]
+        #batteryCurrent = round(sum(batteryCurrentData) / len(batteryCurrentData), 2)
 
-        batteryVoltageData = self.readLog(scene=scene, filename='battery_voltage.log')[1]
-        batteryVoltage = round(sum(batteryVoltageData) / len(batteryVoltageData), 2)
+        #batteryVoltageData = self.readLog(scene=scene, filename='battery_voltage.log')[1]
+        #batteryVoltage = round(sum(batteryVoltageData) / len(batteryVoltageData), 2)
 
-        batteryPowerData = self.readLog(scene=scene, filename='battery_power.log')[1]
-        batteryPower = round(sum(batteryPowerData) / len(batteryPowerData), 2)
+        #batteryPowerData = self.readLog(scene=scene, filename='battery_power.log')[1]
+        #batteryPower = round(sum(batteryPowerData) / len(batteryPowerData), 2)
 
-        gpuData = self.readLog(scene=scene, filename='gpu.log')[1]
-        gpu = round(sum(gpuData) / len(gpuData), 2)
+        #gpuData = self.readLog(scene=scene, filename='gpu.log')[1]
+        #gpu = round(sum(gpuData) / len(gpuData), 2)
 
         apm_dict = {}
         apm_dict['cpuAppRate'] = cpuAppRate
         apm_dict['cpuSystemRate'] = cpuSystemRate
         apm_dict['totalPassAvg'] = totalPassAvg
-        apm_dict['nativePassAvg'] = 0
-        apm_dict['dalvikPassAvg'] = 0
-        apm_dict['fps'] = fpsAvg
-        apm_dict['jank'] = 0
-        apm_dict['flow_send'] = flowSend
-        apm_dict['flow_recv'] = flowRecv
-        apm_dict['batteryTeml'] = batteryTeml
-        apm_dict['batteryCurrent'] = batteryCurrent
-        apm_dict['batteryVoltage'] = batteryVoltage
-        apm_dict['batteryPower'] = batteryPower
-        apm_dict['gpu'] = gpu
+        #apm_dict['nativePassAvg'] = 0
+        #apm_dict['dalvikPassAvg'] = 0
+        #apm_dict['fps'] = fpsAvg
+        #apm_dict['jank'] = 0
+        #apm_dict['flow_send'] = flowSend
+        #apm_dict['flow_recv'] = flowRecv
+        #apm_dict['batteryTeml'] = batteryTeml
+        #apm_dict['batteryCurrent'] = batteryCurrent
+        #apm_dict['batteryVoltage'] = batteryVoltage
+        #apm_dict['batteryPower'] = batteryPower
+        #apm_dict['gpu'] = gpu
         
+        logger.info(apm_dict)
         return apm_dict
 
     def _setpkPerfs(self, scene):
