@@ -385,7 +385,8 @@ def makeReport():
     wifi_switch = method._request(request, 'wifi_switch')
     process = method._request(request, 'process')
     #log_is_ready这个消息收不到了，有空再排查，先写死延迟5秒，等日志文件写完，再去读
-    #time.sleep(5)
+    #把make_report放到web.py里去做了，整个方法就做一件事儿，就是延迟5秒，前端会转菊花
+    time.sleep(5)
     try:
         if platform == Platform.Android:
             deviceId = d.getIdbyDevice(devices, platform)
@@ -398,7 +399,8 @@ def makeReport():
             data = flow.setAndroidNet(wifi=wifi)
             f.record_net('end', data[0], data[1])
             app = process
-        f.make_report(app=app, devices=devices, platform=platform, model=model)
+        #把make_report放到web.py里去做了。
+        #f.make_report(app=app, devices=devices, platform=platform, model=model)
         result = {'status': 1}
     except Exception as e:
         logger.exception(e)

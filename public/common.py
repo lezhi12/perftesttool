@@ -321,6 +321,34 @@ class File:
             case _:
                 logger.error('record network data failed')
     
+
+    #移动日志文件之前先判断下日志文件是否已经正常关闭，未关闭自动重试5此后报错，期间前端会转菊花
+    def move_file(self,file_path, new_file_path, file_name):
+        max_retries = 30
+        retries = 0
+
+        while retries < max_retries:
+            try:
+                # 使用shutil.move移动文件
+                shutil.move(file_path, new_file_path)
+                logger.info(f"文件已移动成功: {file_path} -> {new_file_path}")
+                break
+            except Exception as e:
+                logger.info(f"移动文件失败自动重试: {file_path} -> {new_file_path}\n错误信息: {e}")
+                err_str = str(e)
+                #如果文件被占用，虽然移动失败，但是shutil.move会在目的文件夹中创建一个0KB的同名文件，导致当文件关闭后再移动文件时报“文件已存在”，删除这个文件防止始终无法成功移动
+                if err_str.find('already exists') != -1:
+                    removed_file_path = os.path.join(new_file_path,file_name)
+                    os.remove(removed_file_path)
+                    logger.info(f"重复文件已删除: {removed_file_path}")
+                retries += 1
+                if retries < max_retries:
+                    time.sleep(1)  # 等待1秒后重试
+                else:
+                    logger.error(f"移动文件失败: {file_path} -> {new_file_path}\n错误信息: {e}")
+                    raise
+
+
     def make_report(self, app, devices, platform='Android', model='normal'):
         logger.info('Generating test results ...')
         current_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
@@ -341,7 +369,8 @@ class File:
         for f in os.listdir(self.report_dir):
             filename = os.path.join(self.report_dir, f)
             if f.split(".")[-1] in ['log', 'json']:
-                shutil.move(filename, report_new_dir)        
+                shutil.move(filename, report_new_dir) 
+                #self.move_file(filename, report_new_dir,f)    
         logger.info('Generating test results success: {}'.format(report_new_dir))
         return f'apm_{current_time}'        
 
@@ -352,6 +381,42 @@ class File:
             return 'int'
         else:
             return 'int'
+
+    def wait_for_file_close(file_path):
+        while True:
+            try:
+                with open(file_path, 'r') as file:
+                    break
+            except IOError as e:
+                if e.errno != 2:  # 2表示文件未关闭
+                    raise
+                time.sleep(0.1)  # 等待100毫秒
+        return file
+
+    def readLog_hanhao(self, scene, filename):
+        """Read apmlog file data"""
+        log_data_list = []
+        target_data_list = []
+        if os.path.exists(os.path.join(self.report_dir,scene,filename)):
+            file_path = os.path.join(self.report_dir,scene,filename)
+            f=wait_for_file_close(file_path)
+            #f = open(os.path.join(self.report_dir,scene,filename), "r")
+            lines = f.readlines()
+            for line in lines:
+                if isinstance(line.split('=')[1].strip(), int):
+                    log_data_list.append({
+                        "x": line.split('=')[0].strip(),
+                        "y": int(line.split('=')[1].strip())
+                    })
+                    target_data_list.append(int(line.split('=')[1].strip()))
+                else:
+                    log_data_list.append({
+                        "x": line.split('=')[0].strip(),
+                        "y": float(line.split('=')[1].strip())
+                    })
+                    target_data_list.append(float(line.split('=')[1].strip()))
+        return log_data_list, target_data_list
+
 
     def readLog(self, scene, filename):
         """Read apmlog file data"""

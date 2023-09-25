@@ -30,7 +30,7 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 app.register_blueprint(api)
 app.register_blueprint(page)
 
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*",logger=True, engineio_logger=True)
 thread = True
 thread_lock = Lock()
 
@@ -63,7 +63,7 @@ def connect():
 
 
 # Function to write data to the disk (asynchronous)
-def write_to_disk(queue, file_path):
+def write_to_disk(queue, file_path,app,device,platform):
 
     logger.info("begain to write_to_disk")
     with open(os.path.join(file_path,'cpu_app.log'), "a+") as f_app,open(os.path.join(file_path,'cpu_sys.log'), "a+") as f_sys,open(os.path.join(file_path,'mem_total.log'), "a+") as f_mem:
@@ -88,39 +88,57 @@ def write_to_disk(queue, file_path):
                 mem_total = data[0]
                 f_mem.write(apm_time + "="+ str(mem_total) + "\n")
     logger.info("write_to_disk subprocess has been finished!")
-    #try:
-        #socketio.emit('log_is_ready', namespace='/tidevice')
+    try:
+        f.make_report(app=app, devices=device, platform=platform, model="normal")
+        #socketio.emit('log_is_ready',namespace='/tidevice')
         #socketio.emit('message', {'data': "log is ready"}, namespace='/tidevice')
-    #except Exception as e:
-    #        logger.exception(e)
+    except Exception as e:
+            logger.exception(e)
     
 
 # Function to start writing data to the disk asynchronously
-def start_async_writer(queue, file_path):
+def start_async_writer(queue, file_path,app,device,platform):
     print("start_async_writer")
-    writer_thread = threading.Thread(target=write_to_disk, args=(queue, file_path))
+    writer_thread = threading.Thread(target=write_to_disk, args=(queue, file_path,app,device,platform))
     #主线程结束，守护线程立刻结束没有机会关闭文件，因此不要设置为守护线程
     #writer_thread.daemon = True
     writer_thread.start()
     return writer_thread
 
-@socketio.on('connect', namespace='/tidevice')
-def connect():
-    socketio.emit('start connect', {'data': 'Connected'}, namespace='/tidevice')
+@socketio.on('start', namespace='/tidevice')
+def start_monitor(init_param):
+    pkg_name = init_param['pkg']
+    device_str = init_param['device']
+    platform_str = init_param['platform']
+    logger.info("selected pacakge name is  %s"%pkg_name)
     global thread
     thread = True
     with thread_lock:
         if thread:
-            thread = socketio.start_background_task(target=tidevice_backgroundThread)
+            thread = socketio.start_background_task(target=tidevice_backgroundThread(pkg_name,device_str,platform_str))
 
-def tidevice_backgroundThread():
+#@socketio.on('connect', namespace='/tidevice')
+#def connect():
+    #logger.info("param test %s",str(json))  
+    #socketio.emit('start connect', {'data': 'Connected'}, namespace='/tidevice')
+    #global thread
+    #thread = True
+    #with thread_lock:
+    #    if thread:
+    #        thread = socketio.start_background_task(target=tidevice_backgroundThread)
+
+def tidevice_backgroundThread(pkg_name,device,platform):
     global thread
     try:
-        tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.mobilebank -o cpu,memory", stdout=subprocess.PIPE,
-                                  shell=True)
+        #tidevice_cmd = subprocess.Popen("tidevice perf -B com.psbc.youinterbank.ee -o cpu,memory", stdout=subprocess.PIPE,
+        #                          shell=True)
         #tidevice_q = queue.Queue()
+        cmd_str = "tidevice perf -B %s -o cpu,memory"%(pkg_name)
+        tidevice_cmd = subprocess.Popen(cmd_str, stdout=subprocess.PIPE,
+                                  shell=True)
+
         cpu_info_q = queue.Queue()
-        writer_log_todisk_thread = start_async_writer(cpu_info_q,f.report_dir)
+        writer_log_todisk_thread = start_async_writer(cpu_info_q,f.report_dir,pkg_name,device,platform)
         while thread:
             buff = tidevice_cmd.stdout.readline()
             buff_str = buff.decode()
