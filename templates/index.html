@@ -1452,7 +1452,7 @@ SoloX - Application Performance Monitoring
                 }else{
                     SwalFire('error','Execution error',data['msg'],2000)
                 }
-                socket.close()
+               // socket.close()
             }
         })
 
@@ -1600,6 +1600,7 @@ SoloX - Application Performance Monitoring
                  socket.emit('start', {pkg: package_name,device: device, platform: platform});
                 }
                  );
+
             //socket = io.connect(namespace='/tidevice',query_string='http://' + document.domain + ':' + location.port+'/?device='+device,{ forceNew: true })
             socket.on('message', function (msg) {
                 console.log("msg.data: %o",msg.data);
@@ -1622,6 +1623,13 @@ SoloX - Application Performance Monitoring
                         y = msg.data[0];
                     series.addPoint([x, y], true, true);
                 }
+                else if(status && item_type=="fps"){
+                    var series = fps_chart.series[0];
+                    var x = (new Date()).getTime(),
+                        y = msg.data[0];
+                    series.addPoint([x, y], true, true);
+
+                }
             });
         }else{
             SwalFire('error','Execution error','No device selected',2000)
@@ -1633,7 +1641,11 @@ SoloX - Application Performance Monitoring
 
     function stopTidevice() {
         status = false;
-        socket.emit('disconnect_request')
+        //socket.close();
+        //socket.on("disconnect", function() {
+        //        socket.emit('disconnect_request');
+        //        });
+        //socket.emit('disconnect_request')
 
     };
 

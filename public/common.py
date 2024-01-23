@@ -645,8 +645,8 @@ class File:
         totalPassData = self.readLog(scene=scene, filename='mem_total.log')[1]
         totalPassAvg = f'{round(sum(totalPassData) / len(totalPassData), 2)}MB'
 
-        #fpsData = self.readLog(scene=scene, filename='fps.log')[1]
-        #fpsAvg = f'{int(sum(fpsData) / len(fpsData))}HZ/s'
+        fpsData = self.readLog(scene=scene, filename='fps.log')[1]
+        fpsAvg = f'{int(sum(fpsData) / len(fpsData))}Frame/s'
 
         #flowSendData = self.readLog(scene=scene, filename='upflow.log')[1]
         #flowSend = f'{round(float(sum(flowSendData) / 1024), 2)}MB'
@@ -675,7 +675,7 @@ class File:
         apm_dict['totalPassAvg'] = totalPassAvg
         #apm_dict['nativePassAvg'] = 0
         #apm_dict['dalvikPassAvg'] = 0
-        #apm_dict['fps'] = fpsAvg
+        apm_dict['fps'] = fpsAvg
         #apm_dict['jank'] = 0
         #apm_dict['flow_send'] = flowSend
         #apm_dict['flow_recv'] = flowRecv

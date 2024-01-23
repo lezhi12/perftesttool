@@ -7,12 +7,17 @@ from flask import Blueprint
 from solox.public.apm import CPU, MEM, Flow, FPS, Battery, GPU, Target
 from solox.public.apm_pk import CPU_PK, MEM_PK, Flow_PK, FPS_PK
 from solox.public.common import Devices, File, Method, Install, Platform
+from threading import Event
 
 
 d = Devices()
 f = File()
 api = Blueprint("api", __name__)
 method = Method()
+#用于'/apm/create/report'被调用后，等待日志文件写完报告创建完
+thread_io_event = Event()
+#用于同步客户端发过来的start启动的子线程
+thread_event = Event()
 
 @api.route('/apm/cookie', methods=['post', 'get'])
 def setCookie():
@@ -386,7 +391,11 @@ def makeReport():
     process = method._request(request, 'process')
     #log_is_ready这个消息收不到了，有空再排查，先写死延迟5秒，等日志文件写完，再去读
     #把make_report放到web.py里去做了，整个方法就做一件事儿，就是延迟5秒，前端会转菊花
-    time.sleep(5)
+    #time.sleep(10)
+    #把perf停掉，日志可以开始写入了
+    thread_event.clear()
+    #等日志写完关闭
+    thread_io_event.wait()
     try:
         if platform == Platform.Android:
             deviceId = d.getIdbyDevice(devices, platform)
@@ -399,8 +408,7 @@ def makeReport():
             data = flow.setAndroidNet(wifi=wifi)
             f.record_net('end', data[0], data[1])
             app = process
-        #把make_report放到web.py里去做了。
-        #f.make_report(app=app, devices=devices, platform=platform, model=model)
+        f.make_report(app=app, devices=devices, platform=platform, model="normal")
         result = {'status': 1}
     except Exception as e:
         logger.exception(e)
@@ -529,10 +537,10 @@ def getLogData():
     try:
         fucDic = {
             'cpu': f.getCpuLog(platform, scene),
-            'mem': f.getMemLog(platform, scene)
+            'mem': f.getMemLog(platform, scene),
             #'battery': f.getBatteryLog(platform, scene),
             #'flow': f.getFlowLog(platform, scene),
-            #'fps': f.getFpsLog(platform, scene),
+            'fps': f.getFpsLog(platform, scene)
             #'gpu': f.getGpuLog(platform, scene)
         }
         result = fucDic[target]
