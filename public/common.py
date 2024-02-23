@@ -118,6 +118,11 @@ class Devices:
         pkgResult = self.execCmd(f'tidevice --udid {udid} applist').split('\n')
         pkgNames = [pkgResult[i].split(' ')[0] for i in range(len(pkgResult))]
         return pkgNames
+    def getPidByiOS17(self):
+        """ios17及以上版本通过pymobiledevice3获得pid"""
+        pkgResult = self.execCmd(f'pymobiledevice3 developer dvt proclist --rsd {rsdinfo}').split('\n')
+        pkgNames = [pkgResult[i].split(' ')[0] for i in range(len(pkgResult))]
+        return pkgNames
     
     def get_pc_ip(self):
         try:

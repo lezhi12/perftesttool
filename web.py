@@ -28,6 +28,8 @@ import queue
 import tidevice
 from tidevice._perf import DataType
 from threading import Event
+from solox.perf_engine.perf_pymobiledevice3 import Performance
+from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
 
 f = File()
 
@@ -162,7 +164,7 @@ def start_async_writer(queue, file_path,app,device,platform):
     writer_thread.start()
     return writer_thread
 def tidevice_callback(_type: tidevice.DataType, value: dict):
-    #logger.debug("T:", _type.value, value)
+    #logger.debug(value)
     if _type == "cpu":
         cpu_app = round(float(value["value"]),2)
         cpu_sys = round(float(value["sys_value"]),2)
@@ -181,10 +183,13 @@ def tidevice_callback(_type: tidevice.DataType, value: dict):
         q_io.put([fps_value,fps_timestamp,_type])
 @socketio.on('start', namespace='/tidevice')
 def start_fun(init_param):
+    #logger.info(init_param)
     pkg_name = init_param['pkg']
     device_str = init_param['device']
     platform_str = init_param['platform']
-    logger.info("selected pacakge name is  %s"%pkg_name)
+    productversion = init_param['productversion']
+    #logger.info("selected pacakge name is  %s, os_version is %s"%pkg_name,%productversion)
+    logger.info("selected pacakge name is %s, os_version is %s" % (pkg_name, productversion))
     global thread
     thread = True
     #多次采集数据，每次采集数据之前需要把这个队列清空一下防止上次数据污染这一次数据
@@ -194,12 +199,12 @@ def start_fun(init_param):
         #if thread is False:
         if thread :
             thread_event.set()
-            thread = socketio.start_background_task(target=backgroundThread_start(pkg_name,device_str,platform_str))
+            thread = socketio.start_background_task(target=backgroundThread_start(pkg_name,device_str,platform_str,productversion))
             logger.debug("socketio.start_background_task stop........")
             logger.debug("q_emit size is %d",q_emit.qsize())
             logger.debug("q_io size is %d",q_io.qsize())
 
-def backgroundThread_start(pkg_name,device,platform):
+def backgroundThread_start(pkg_name,device,platform,productversion):
     global thread
     #pkg_name = init_param['pkg']
     #device_str = init_param['device']
@@ -208,9 +213,16 @@ def backgroundThread_start(pkg_name,device,platform):
     logger.debug("backgroundThread_start start........")
     logger.debug("q_emit size is %d",q_emit.qsize())
     logger.debug("q_io size is %d",q_io.qsize())
-    t = tidevice.Device()
-    perf = tidevice.Performance(t, [DataType.CPU, DataType.MEMORY,  DataType.FPS])
-    perf.start(pkg_name, callback=tidevice_callback)
+    product_version = productversion.split(".")
+    product_version = int(product_version[0])
+    if product_version < 17:
+        t = tidevice.Device()
+        perf = tidevice.Performance(t, [DataType.CPU, DataType.MEMORY,  DataType.FPS])
+        perf.start(pkg_name, callback=tidevice_callback)
+    else:
+        with RemoteServiceDiscoveryService(('fd14:9456:4ff::1',59397)) as rsd:
+            perf = Performance(rsd,[DataType.CPU,DataType.MEMORY,DataType.FPS])
+            perf.start(rsd,"YCReBank", callback=tidevice_callback)
     log_io_thread = threading.Thread(target=write_logto_disk, args=(f.report_dir,pkg_name,device,platform))
     #主线程结束，守护线程立刻结束没有机会关闭文件，因此不要设置为守护线程
     #writer_thread.daemon = True
@@ -220,7 +232,7 @@ def backgroundThread_start(pkg_name,device,platform):
             #time.sleep(1)
             perf_list = q_emit.get()
             #必须调用socketio.sleep否则客户端是循环结束的时候一次性收数据，要想实时收必须调这个
-            socketio.sleep(0.5)
+            socketio.sleep(0.3)
             #这里要想不出现偶尔卡顿得情况，服务器端需要安装eventlet，否则socket.io网络层默认使用Werkzeug，从F12可以看出来仍然是长轮询，就会卡。
             socketio.emit('message', {'data': perf_list}, namespace='/tidevice')
     except Exception as e:

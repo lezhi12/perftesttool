@@ -1590,6 +1590,7 @@ SoloX - Application Performance Monitoring
     function startTidevice() {
         let device = $('.select-device').val();
         let package_name = $('.select-app').val();
+        let productversion = $('#os_version').text();
         console.log("startTidevice")
         status = true
         if(device){
@@ -1597,7 +1598,7 @@ SoloX - Application Performance Monitoring
             $('#stop-logcat').show();
             socket = io.connect('http://' + document.domain + ':' + location.port + '/tidevice',{'forceNew':true });
             socket.on('connect', function() {
-                 socket.emit('start', {pkg: package_name,device: device, platform: platform});
+                 socket.emit('start', {pkg: package_name,device: device, platform: platform, productversion: productversion});
                 }
                  );
 
