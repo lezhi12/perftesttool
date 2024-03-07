@@ -157,27 +157,33 @@ def sysmon_process_monitor(service_provider, name):
     """ monitor all most consuming processes by given cpuUsage threshold. """
 
     Process = namedtuple('process', 'pid name cpuUsage physFootprint syscpu')
-    sys_cpu = 0.0
+    #最终的app利用率和system利用率都是除过核心数的
+    sys_cpu_percore = 0.0
+    #只要来一次system信息，cpu_count就会被记住，之后每次来process信息，都用这个cpucount计算app_cpu
+    #这样，process只等第一次system，不会每次都等system
+    cpu_count = 0
 
     with DvtSecureSocketProxyService(lockdown=service_provider) as dvt:
         with Sysmontap(dvt) as sysmon:
             for process_snapshot in sysmon.iter_sysandproc():
                 entries = []
                 for process in process_snapshot:
-                    if 'cpuUsage' in process and  (process['cpuUsage'] is not None) and (process['name'] ==name ) and  (process['physFootprint'] is not None) :
+                    if 'cpuUsage' in process and  (process['cpuUsage'] is not None) and (process['name'] ==name ) and  (process['physFootprint'] is not None and cpu_count>0) :
                         logger.info(process)
                         entries.append(Process(
                         pid=process['pid'],
                         name=process['name'],
-                        cpuUsage=process['cpuUsage'],
+                        cpuUsage=process['cpuUsage']/cpu_count,
                         physFootprint=process['physFootprint'],
-                        syscpu=sys_cpu)
+                        syscpu=sys_cpu_percore)
                         )
+                        break
                     elif 'SystemCPUUsage' in process and 'CPUCount' in process :
                         cpu_count = int(process['CPUCount'])
                         systemcpuusage_dic = process['SystemCPUUsage']
                         cpu_totalload = float(systemcpuusage_dic['CPU_TotalLoad'])
-                        sys_cpu = cpu_totalload/cpu_count
+                        sys_cpu_percore = cpu_totalload/cpu_count
+                        break
 
 
                 if len(entries) > 0:

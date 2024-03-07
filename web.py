@@ -10,6 +10,7 @@ import webbrowser
 import requests
 import socket
 import sys
+import asyncio
 from solox.view.apis import api
 from solox.view.pages import page
 from solox.view.apis import thread_io_event
@@ -30,6 +31,15 @@ from tidevice._perf import DataType
 from threading import Event
 from solox.perf_engine.perf_pymobiledevice3 import Performance
 from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+from pymobiledevice3.remote.module_imports import start_tunnel
+from pymobiledevice3.cli.remote import install_driver_if_required
+from pymobiledevice3.cli.remote import select_device
+from typing import TextIO
+from pymobiledevice3.remote.core_device_tunnel_service import RemotePairingQuicTunnel
+from pymobiledevice3.remote.common import TunnelProtocol
+from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
+from pymobiledevice3.services.dvt.instruments.device_info import DeviceInfo
+
 
 f = File()
 
@@ -46,6 +56,12 @@ thread_lock = Lock()
 q_emit = queue.Queue()  
 #用于写日志到硬盘
 q_io = queue.Queue()
+#用于存ios17的pymobiledevice3 remote start-tunnel返回的rsd信息
+q_tuninfo = queue.Queue()
+#用于存ios17的pymobiledevice3 remote start-tunnel返回的rsd结果，防止重复创建连接
+t_result = None
+#用于存ios17建立连接的thread变量
+rsd_thread = None
 
 @app.before_request
 def before_request():
@@ -203,8 +219,97 @@ def start_fun(init_param):
             logger.debug("socketio.start_background_task stop........")
             logger.debug("q_emit size is %d",q_emit.qsize())
             logger.debug("q_io size is %d",q_io.qsize())
-
+async def ios17_create_tunnel(rsd,protocol):
+       logger.info(f'ios_create_tunnel started')
+       async with start_tunnel(rsd, secrets=None, max_idle_timeout=RemotePairingQuicTunnel.MAX_IDLE_TIMEOUT,
+                                    protocol=protocol) as tunnel_result:
+            logger.info(f'tunnel_result successfully retrun : {tunnel_result}')
+            # 向队列发送信号address和端口号已有，client可以开始建立本地TUN设备了  
+            q_tuninfo.put(tunnel_result)
+            logger.info(f'q_tuninfo size is:{q_tuninfo.qsize()}') 
+            await tunnel_result.client.wait_closed()  
+def run_async_in_thread(rsd,protocol):
+    loop = asyncio.new_event_loop()  
+    asyncio.set_event_loop(loop)  
+    try:  
+        loop.run_until_complete(ios17_create_tunnel(rsd,protocol))  
+    except KeyboardInterrupt:  
+        pass  
+    finally:  
+        loop.close()
+def pkgname2name(service_provider,pkgname):
+    """ pkgname转name"""
+    with DvtSecureSocketProxyService(service_provider) as dvt:
+        processes = DeviceInfo(dvt).proclist()
+        for process in processes:
+            if 'bundleIdentifier' in process and process['bundleIdentifier']==pkgname:
+                name = process['name']
+                break
+        return name
 def backgroundThread_start(pkg_name,device,platform,productversion):
+    global thread
+    global t_result
+    global rsd_thread
+    #pkg_name = init_param['pkg']
+    #device_str = init_param['device']
+    #platform_str = init_param['platform']
+    #logger.info("selected pacakge name is  %s"%pkg_name)
+    logger.debug("backgroundThread_start start........")
+    logger.debug("q_emit size is %d",q_emit.qsize())
+    logger.debug("q_io size is %d",q_io.qsize())
+    product_version = productversion.split(".")
+    product_version = int(product_version[0])
+    if product_version < 17:
+        t = tidevice.Device()
+        perf = tidevice.Performance(t, [DataType.CPU, DataType.MEMORY,  DataType.FPS])
+        perf.start(pkg_name, callback=tidevice_callback)
+    else:
+        #判断一下，防止每次页面点击start的时候重复的装驱动建立连接
+        #这块还需要考虑下，如果中途用户把手机拔掉了，如何反应到t_result这个变量上
+        #已知bug，拔掉数据线，等几秒中，tun设备再次心跳时，会检测到设备掉线，子线程会结束，但是主线程被阻塞了，无法响应前端页面了，需要排查一下
+        if t_result==None or (rsd_thread is not None and not rsd_thread.is_alive()):
+            install_driver_if_required()
+            protocol = TunnelProtocol(TunnelProtocol.QUIC.value)
+            rsd = select_device(None)
+            logger.info(f'rsd is :{rsd}')
+            thread_create_tunnel = threading.Thread(target=run_async_in_thread,args=(rsd,protocol) )  
+            thread_create_tunnel.daemon = True
+            thread_create_tunnel.start() 
+            while True:  
+                if not q_tuninfo.empty():  
+                    # 从队列中获取信号  
+                    t_result = q_tuninfo.get()  
+                    logger.info(f't_result is: {t_result}')  
+                    break  
+                # 稍微等待一下，避免忙等  
+                time.sleep(0.1)    
+        with RemoteServiceDiscoveryService((t_result.address, t_result.port)) as rsd:
+            name = pkgname2name(rsd,pkg_name)
+            perf = Performance(rsd,[DataType.CPU,DataType.MEMORY,DataType.FPS])
+            #perf.start(rsd,"YCReBank", callback=tidevice_callback)
+            perf.start(rsd,name, callback=tidevice_callback)
+    log_io_thread = threading.Thread(target=write_logto_disk, args=(f.report_dir,pkg_name,device,platform))
+    #主线程结束，守护线程立刻结束没有机会关闭文件，因此不要设置为守护线程
+    #writer_thread.daemon = True
+    log_io_thread.start()
+    try:
+        while thread_event.is_set():
+            #time.sleep(1)
+            perf_list = q_emit.get()
+            #必须调用socketio.sleep否则客户端是循环结束的时候一次性收数据，要想实时收必须调这个
+            socketio.sleep(0.3)
+            #这里要想不出现偶尔卡顿得情况，服务器端需要安装eventlet，否则socket.io网络层默认使用Werkzeug，从F12可以看出来仍然是长轮询，就会卡。
+            socketio.emit('message', {'data': perf_list}, namespace='/tidevice')
+    except Exception as e:
+        logger.exception(e)
+    finally:
+        #q_io.put(["time to quit","time to quit"])
+        #thread_event.clear()
+        perf.stop()
+        logger.debug("backgroundThread_start Finish!")
+        #thread = False
+
+def backgroundThread_start_orig(pkg_name,device,platform,productversion):
     global thread
     #pkg_name = init_param['pkg']
     #device_str = init_param['device']
@@ -220,7 +325,7 @@ def backgroundThread_start(pkg_name,device,platform,productversion):
         perf = tidevice.Performance(t, [DataType.CPU, DataType.MEMORY,  DataType.FPS])
         perf.start(pkg_name, callback=tidevice_callback)
     else:
-        with RemoteServiceDiscoveryService(('fd14:9456:4ff::1',59397)) as rsd:
+        with RemoteServiceDiscoveryService(('fd16:f827:d558::1', 60339)) as rsd:
             perf = Performance(rsd,[DataType.CPU,DataType.MEMORY,DataType.FPS])
             perf.start(rsd,"YCReBank", callback=tidevice_callback)
     log_io_thread = threading.Thread(target=write_logto_disk, args=(f.report_dir,pkg_name,device,platform))
@@ -243,6 +348,8 @@ def backgroundThread_start(pkg_name,device,platform,productversion):
         perf.stop()
         logger.debug("backgroundThread_start Finish!")
         #thread = False
+
+
 
 @socketio.on('start_bac', namespace='/tidevice')
 def start_monitor(init_param):

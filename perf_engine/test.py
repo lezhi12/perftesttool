@@ -1,42 +1,27 @@
-import os  
 import threading  
-import queue  
+import time  
   
-def execute_command(cmd, output_queue):  
-    # 使用 os.popen 执行命令  
-    process = os.popen(cmd)  
-    output = process.read()  
-      
-    # 将输出结果放入队列中  
-    output_queue.put(output)  
-      
-    # 关闭进程  
-    process.close()  
+# 定义全局的Thread对象  
+thread = None  
   
-def print_output(output_queue):  
-    while True:  
-        # 从队列中获取输出结果  
-        output = output_queue.get()  
-          
-        # 如果输出为空，表示子线程已完成  
-        if not output:  
-            break  
-          
-        # 打印输出结果  
-        print(output)  
+# 子线程的工作函数  
+def worker():  
+    global thread  
+    # 模拟一些工作  
+    time.sleep(2)  
+    print("子线程工作完成")  
   
-# 创建命令  
-cmd = "pymobiledevice3 remote start-tunnel"  # Windows CMD命令，可以根据需要替换为其他命令  
+# 在主线程中创建Thread对象  
+thread = threading.Thread(target=worker)  
   
-# 创建队列用于同步  
-output_queue = queue.Queue()  
-  
-# 创建并启动子线程  
-thread = threading.Thread(target=execute_command, args=(cmd, output_queue))  
+# 启动子线程  
 thread.start()  
   
-# 在主线程中打印输出结果  
-print_output(output_queue)  
+# 在子线程开始执行后打印信息  
+print("子线程已开始执行")  
   
-# 等待子线程完成  
-thread.join()
+# 等待子线程结束  
+thread.join()  
+  
+# 子线程结束后打印信息  
+print("子线程已结束执行")
