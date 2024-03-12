@@ -1,5 +1,5 @@
 from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
-from pymobiledevice3.services.dvt.instruments.sysmontap import Sysmontap
+from solox.public.iosperf.sysmontap import Sysmontap
 from pymobiledevice3.services.dvt.instruments.graphics import Graphics
 from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
 import logging
